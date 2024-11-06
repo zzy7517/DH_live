@@ -13,7 +13,7 @@ Audio files must be in 16k single-channel wav format.
 ### 1. Face Video Generation
 ```bash
 python preparation_step0.py <face_path> <wav_16K_path>
-# Example: preparation_step0.py train_data
+# Example: preparation_step0.py face.jpg train_data
 ```
 
 ### 2. Mouth Region Extraction and PCA Modeling
