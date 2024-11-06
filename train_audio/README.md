@@ -3,7 +3,7 @@
 ## Data Preparation
 - Use over 10,000 short audio clips with diverse speakers, each at least 5 seconds long, in 16k single-channel wav format.
 - Place these files in the `train_audio/train_data` folder.
-- Download `wav2lip.pth` from the wav2lip project and place it in the `checkpoints` folder.
+- Download `wav2lip.pth` from the wav2lip project (https://github.com/Rudrabha/Wav2Lip) and place it in the `train_audio/checkpoints` folder.
 
 #### Notes
 Audio files must be in 16k single-channel wav format.
