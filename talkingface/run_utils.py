@@ -7,34 +7,61 @@ def Tensor2img(tensor_, channel_index):
     frame = np.transpose(frame, (1, 2, 0)) * 255.0
     frame = frame.clip(0, 255)
     return frame.astype(np.uint8)
-INDEX_EYE_CORNER = [INDEX_LEFT_EYE[0], INDEX_LEFT_EYE[8], INDEX_RIGHT_EYE[0], INDEX_RIGHT_EYE[8]]
-# INDEX_FACE_OVAL_UPPER = INDEX_FACE_OVAL[7:-7]
-INDEX_FACE_OVAL_UPPER = INDEX_FACE_OVAL[:7] + INDEX_FACE_OVAL[-7:]
+
+
+def correct_rotation_matrix(R):
+    # Perform SVD on the 3x3 part of the matrix
+    U, S, VT = np.linalg.svd(R, full_matrices=True)
+
+    # Ensure the determinant is 1 to avoid reflection
+    det = np.linalg.det(U @ VT)
+    if det < 0:
+        VT[-1, :] *= -1  # or U[:, -1] *= -1
+    scale_matrix = np.diag(S)
+    # Combine scaling and rotation
+    scaled_rotation_matrix = U @ scale_matrix @ VT
+    # print("sssssssssssss", det)
+    return scaled_rotation_matrix
+def mat_A(pts):
+    A = np.zeros([len(pts) * 3, 12])
+    for i in range(len(pts)):
+        A[3 * i + 0, 0:3] = pts[i]
+        A[3 * i + 0, 3] = 1
+        A[3 * i + 1, 4:7] = pts[i]
+        A[3 * i + 1, 7] = 1
+        A[3 * i + 2, 8:11] = pts[i]
+        A[3 * i + 2, 11] = 1
+    return A
+from sklearn import decomposition
 def calc_face_mat(pts_array_origin, face_pts_mean):
     '''
 
     :param pts_array_origin: mediapipe检测出的人脸关键点
     :return:
     '''
-    face_pts_mean_rotatePts = face_pts_mean[INDEX_EYEBROW + INDEX_NOSE + INDEX_EYE_CORNER + INDEX_FACE_OVAL_UPPER]
-    A = np.zeros([len(face_pts_mean_rotatePts) * 3, 12])
-    for i in range(len(face_pts_mean_rotatePts)):
-        A[3 * i + 0, 0:3] = face_pts_mean_rotatePts[i]
-        A[3 * i + 0, 3] = 1
-        A[3 * i + 1, 4:7] = face_pts_mean_rotatePts[i]
-        A[3 * i + 1, 7] = 1
-        A[3 * i + 2, 8:11] = face_pts_mean_rotatePts[i]
-        A[3 * i + 2, 11] = 1
+
+    A = mat_A(face_pts_mean)
     A_inverse = np.linalg.pinv(A)
     pts_normalized_list = []
     mat_list = []
     for i in pts_array_origin:
-        i_rotatePts = i[INDEX_EYEBROW + INDEX_NOSE + INDEX_EYE_CORNER + INDEX_FACE_OVAL_UPPER]
-        B = i_rotatePts.flatten()
+        B = i.flatten()
         x = A_inverse.dot(B)
         rotationMatrix = np.zeros([4, 4])
         rotationMatrix[:3, :] = x.reshape(3, 4)
         rotationMatrix[3, 3] = 1
+
+        R = rotationMatrix[:3, :3]
+        # Correct the rotation part
+        corrected_R = correct_rotation_matrix(R)
+
+        centroid_src = np.mean(face_pts_mean, axis=0)
+        centroid_tgt = np.mean(i, axis=0)
+
+        # Step 4: Compute translation vector
+        T = centroid_tgt - corrected_R @ centroid_src
+        rotationMatrix[:3, :3] = corrected_R
+        rotationMatrix[:3, 3] = T
         mat_list.append(rotationMatrix)
 
     for index_, i in enumerate(pts_array_origin):
@@ -44,38 +71,49 @@ def calc_face_mat(pts_array_origin, face_pts_mean):
         keypoints_normalized = np.linalg.inv(rotationMatrix).dot(keypoints).T
         pts_normalized_list.append(keypoints_normalized[:, :3])
 
-    # mouth_normalized_adjust = np.mean(np.array(pts_normalized_list)[:, INDEX_LIPS], axis=0)
-    # print(mouth_normalized_adjust.shape)
+    x = np.array(pts_normalized_list).reshape(len(pts_normalized_list), -1)
+    print(x.shape)
+    n_components = min(25, len(pts_array_origin)//20)
+    pca = decomposition.PCA(n_components=n_components)
+    pca.fit(x)
+    y = pca.transform(x)
+    x_new = pca.inverse_transform(y)
+    x_new = x_new.reshape(len(x_new), 478, 3)
 
-    face_pts_mean_personal = np.mean(np.array(pts_normalized_list), axis=0)
-    # print("face_pts_mean_personal", face_pts_mean_personal.shape)
-    face_pts_mean_rotatePts2 = face_pts_mean_personal[
-        INDEX_EYEBROW + INDEX_NOSE + INDEX_EYE_CORNER + INDEX_FACE_OVAL_UPPER]
-    A2 = np.zeros([len(face_pts_mean_rotatePts2) * 3, 12])
-    for i in range(len(face_pts_mean_rotatePts2)):
-        A2[3 * i + 0, 0:3] = face_pts_mean_rotatePts2[i]
-        A2[3 * i + 0, 3] = 1
-        A2[3 * i + 1, 4:7] = face_pts_mean_rotatePts2[i]
-        A2[3 * i + 1, 7] = 1
-        A2[3 * i + 2, 8:11] = face_pts_mean_rotatePts2[i]
-        A2[3 * i + 2, 11] = 1
-    A2_inverse = np.linalg.pinv(A2)
     pts_normalized_list = []
     mat_list = []
-    for i in pts_array_origin:
-        i_rotatePts = i[INDEX_EYEBROW + INDEX_NOSE + INDEX_EYE_CORNER + INDEX_FACE_OVAL_UPPER]
-        B = i_rotatePts.flatten()
-        x = A2_inverse.dot(B)
+    for index, x in enumerate(x_new):
+        A = mat_A(x)
+        A_inverse = np.linalg.pinv(A)
+
+        B = pts_array_origin[index].flatten()
+        x = A_inverse.dot(B)
         rotationMatrix = np.zeros([4, 4])
         rotationMatrix[:3, :] = x.reshape(3, 4)
         rotationMatrix[3, 3] = 1
+        R = rotationMatrix[:3, :3]
+        # Correct the rotation part
+        corrected_R = correct_rotation_matrix(R)
+
+        centroid_src = np.mean(x_new[index], axis=0)
+        centroid_tgt = np.mean(pts_array_origin[index], axis=0)
+
+        # Step 4: Compute translation vector
+        T = centroid_tgt - corrected_R @ centroid_src
+        rotationMatrix[:3, :3] = corrected_R
+        rotationMatrix[:3, 3] = T
+
         mat_list.append(rotationMatrix)
 
     mat_list = np.array(mat_list)
     # mat_list必须要平滑，注意是针对每个视频分别平滑
     sub_mat_list = mat_list
     smooth_array_ = sub_mat_list.reshape(-1, 16)
-    smooth_array_ = smooth_array(smooth_array_)
+    import pandas as pd
+
+    smooth_array_ = smooth_array(smooth_array_, weight = [0.04,0.08,0.13,0.5,0.13,0.08,0.04])
+    # pd.DataFrame(smooth_array_[200:400]).to_csv("sad.csv")
+    # exit(-1)
     # print(smooth_array_, smooth_array_.shape)
     smooth_array_ = smooth_array_.reshape(-1, 4, 4)
     mat_list = smooth_array_
@@ -88,6 +126,7 @@ def calc_face_mat(pts_array_origin, face_pts_mean):
         keypoints_normalized = np.linalg.inv(rotationMatrix).dot(keypoints).T
         pts_normalized_list.append(keypoints_normalized[:,:3])
 
+    face_pts_mean_personal = pca.mean_.reshape(478, 3)
     return mat_list,pts_normalized_list,face_pts_mean_personal
 face_pts_mean = None
 def video_pts_process(pts_array_origin):

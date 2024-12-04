@@ -11,8 +11,8 @@ from talkingface.render_model import RenderModel
 
 def main():
     # 检查命令行参数的数量
-    if len(sys.argv) < 4:
-        print("Usage: python demo.py <video_path> <output_video_name> <model_name>")
+    if len(sys.argv) < 5:
+        print("Usage: python demo.py <video_path> <audio_path> <output_video_name> <model_name>")
         sys.exit(1)  # 参数数量不正确时退出程序
 
     # 获取video_name参数

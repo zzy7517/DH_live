@@ -47,9 +47,10 @@ INDEX_EYEBROW = INDEX_LEFT_EYEBROW + INDEX_RIGHT_EYEBROW
 INDEX_NOSE = INDEX_NOSE_EDGE + INDEX_NOSE_MID
 INDEX_LIPS = INDEX_LIPS_INNER + INDEX_LIPS_OUTER
 INDEX_EYE = INDEX_LEFT_EYE + INDEX_RIGHT_EYE
-# print(INDEX_FACE_OVAL_STABLE)
-# print(len(main_keypoints_index))
-# print(len(set(main_keypoints_index)))
+
+INDEX_LIPS_LOWER = INDEX_LIPS_INNER[:11] + INDEX_LIPS_OUTER[:11][::-1]
+INDEX_LIPS_UPPER = INDEX_LIPS_INNER[10:] + [INDEX_LIPS_INNER[0], INDEX_LIPS_OUTER[0]] + INDEX_LIPS_OUTER[10:][::-1]
+
 FACE_MASK_INDEX = INDEX_FACE_OVAL[2:-2]
 def crop_face(keypoints, is_train = False, size = [512, 512]):
     """
@@ -73,6 +74,27 @@ def crop_face(keypoints, is_train = False, size = [512, 512]):
     x_max = min(size[1], x_max)
     y_max = min(size[0], y_max)
     return [x_min, y_min, x_max, y_max]
+
+def crop_mouth(pts_array_origin, img_w, img_h, is_train = False):
+    center_x = np.mean(pts_array_origin[INDEX_LIPS_OUTER, 0])
+    center_y = np.mean(pts_array_origin[INDEX_LIPS_OUTER, 1])
+    x_min, y_min, x_max, y_max = np.min(pts_array_origin[INDEX_FACE_OVAL[2:-2], 0]), np.min(
+        pts_array_origin[INDEX_FACE_OVAL[2:-2], 1]), np.max(
+        pts_array_origin[INDEX_FACE_OVAL[2:-2], 0]), np.max(pts_array_origin[INDEX_FACE_OVAL[2:-2], 1])
+    x_min = max(0, x_min)
+    y_min = max(0, y_min)
+    x_max = min(x_max, img_w)
+    y_max = min(y_max, img_h)
+    new_size = max((x_max - x_min), (y_max - y_min))*0.56
+
+    if is_train:
+        h_offset = int(new_size * 0.04)
+        h_offset = random.randint(-h_offset, h_offset)
+        center_y = center_y + h_offset
+
+    x_min, y_min, x_max, y_max = int(center_x - new_size), int(center_y - new_size*0.95), int(
+        center_x + new_size), int(center_y + new_size*1.05)
+    return np.array([x_min, y_min, x_max, y_max])
 
 def draw_face_feature_maps(keypoints, mode = ["mouth", "nose", "eye", "oval"], size=(256, 256), im_edges = None,  mouth_width = None, mouth_height = None):
     w, h = size
@@ -241,15 +263,18 @@ def smooth_array(array, weight = [0.1,0.8,0.1], mode = "numpy"):
         # for i in range(out.shape[1]):
         #     out[:, i] = np.convolve(input[:, i], weight, mode="same")
         # out0 = out[1:-1]
+        smooth_length = len(weight)
+        assert smooth_length % 2 == 1, "卷积核权重个数必须使用奇数"
+        pad = smooth_length // 2
         fliter = np.array([weight]).T
         x0 = array
         fliter = np.repeat(fliter, x0.shape[1], axis=1)
         out0 = np.zeros_like(x0)
         for i in range(len(x0)):
-            if i == 0 or i == len(x0) - 1:
+            if i < pad or i >= len(x0) - pad:
                 out0[i] = x0[i]
             else:
-                tmp = x0[i - 1:i + 2] * fliter
+                tmp = x0[i - pad:i + pad + 1] * fliter
                 out0[i] = np.sum(tmp, axis=0)
         return out0
 

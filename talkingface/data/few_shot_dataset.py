@@ -7,16 +7,22 @@ import glob
 import pickle
 import torch
 import torch.utils.data as data
-def get_image(A_path, crop_coords, input_type, resize= (256, 256)):
+def get_image(A_path, crop_coords, input_type, resize= 256):
     (x_min, y_min, x_max, y_max) = crop_coords
     size = (x_max - x_min, y_max - y_min)
 
     if input_type == 'mediapipe':
-        pose_pts = (A_path - np.array([x_min, y_min])) * resize / size
-        return pose_pts[:, :2]
+        if A_path.shape[1] == 2:
+            pose_pts = (A_path - np.array([x_min, y_min])) * resize / size
+            return pose_pts[:, :2]
+        else:
+            A_path[:, 2] = A_path[:, 2] - np.max(A_path[:, 2])
+            pose_pts = (A_path - np.array([x_min, y_min, 0])) * resize / size[0]
+            return pose_pts[:, :3]
+
     else:
         img_output = A_path[y_min:y_max, x_min:x_max, :]
-        img_output = cv2.resize(img_output, resize)
+        img_output = cv2.resize(img_output, (resize, resize))
         return img_output
 def generate_input(img, keypoints, mask_keypoints, is_train = False, mode=["mouth_bias"], mouth_width = None, mouth_height = None):
     # 根据关键点决定正方形裁剪区域
