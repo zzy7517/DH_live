@@ -1,10 +1,11 @@
 # Real-time Live Streaming Digital Human
 # 实时直播数字人  [bilibili video](https://www.bilibili.com/video/BV1Ppv1eEEgj/?vd_source=53601feee498369e726af7dbc2dae349)
 ### News
-Audio Model training code released！Details can be found [here](https://github.com/kleinlee/DH_live/tree/master/train_audio).
-
+## fastest and cpu real-time model released! try demo_mini.py! More demo on PC、 web、 android&IOS will be released soon！
+ All checkpoint files are moved to [baiduNetDisk](https://pan.baidu.com/s/1jH3WrIAfwI3U5awtnt9KPQ?pwd=ynd7)
 ## Training
 Details on the render model training can be found [here](https://github.com/kleinlee/DH_live/tree/master/train).
+Audio Model training Details can be found [here](https://github.com/kleinlee/DH_live/tree/master/train_audio).
 ### Video Example
 
 
