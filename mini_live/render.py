@@ -11,6 +11,7 @@ from mini_live.obj.obj_utils import generateRenderInfo, generateWrapModel
 from talkingface.utils import crop_mouth, main_keypoints_index
 current_dir = os.path.dirname(os.path.abspath(__file__))
 import cv2
+import torch.nn.functional as F
 class RenderModel_gl:
     def __init__(self, window_size):
         self.window_size = window_size
@@ -145,14 +146,8 @@ class RenderModel_gl:
 def create_render_model(out_size = (384, 384), floor = 5):
     renderModel_gl = RenderModel_gl(out_size)
 
-    image2 = cv2.imread(os.path.join(current_dir, "bs_texture.png"))
-
-    image3 = np.zeros([12,256,3], dtype = np.uint8)
-    image3[:, :len(index_wrap)] = image2[:,index_wrap]
-    # print(image2.shape)
-    # exit(-1)
-
-    renderModel_gl.GenTexture(image3, GL_TEXTURE0)
+    image2 = cv2.imread(os.path.join(current_dir, "bs_texture_halfFace.png"))
+    renderModel_gl.GenTexture(image2, GL_TEXTURE0)
 
     render_verts, render_face = generateRenderInfo()
     wrapModel_verts,wrapModel_face = generateWrapModel()
@@ -179,17 +174,13 @@ if __name__ == "__main__":
     from talkingface.data.few_shot_dataset import get_image
 
     Audio2FeatureModel = LoadAudioModel(r'../checkpoint\lstm/lstm_model_epoch_325.pkl')
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    mouth_fusion_mask = cv2.imread("mouth_fusion_mask.png").astype(float)/255.
-
 
     from talkingface.render_model_mini import RenderModel_Mini
     renderModel_mini = RenderModel_Mini()
-    renderModel_mini.loadModel("../checkpoint/FreeFace_3ref/epoch_60.pth")
+    renderModel_mini.loadModel("../checkpoint/DINet_mini/epoch_40.pth")
 
     start_time = time.time()
-    standard_size = 320
+    standard_size = 256
     crop_rotio = [0.5, 0.5, 0.5, 0.5]
     out_w = int(standard_size*(crop_rotio[0] + crop_rotio[1]))
     out_h = int(standard_size*(crop_rotio[2] + crop_rotio[3]))
@@ -205,6 +196,8 @@ if __name__ == "__main__":
         Path_output_pkl = "{}/{}/keypoint_rotate.pkl".format(path, test_video)
         with open(Path_output_pkl, "rb") as f:
             images_info = pickle.load(f)
+
+        images_info = np.concatenate([images_info, images_info[::-1]], axis=0)
 
         video_path = "{}/{}/circle.mp4".format(path, test_video)
         cap = cv2.VideoCapture(video_path)
@@ -235,35 +228,14 @@ if __name__ == "__main__":
         cap.release()
 
         renderModel_mini.reset_charactor(list_standard_img, np.array(list_standard_v)[:,main_keypoints_index])
-
-        # 求平均人脸
         from talkingface.run_utils import calc_face_mat
         mat_list, _, face_pts_mean_personal_primer = calc_face_mat(np.array(list_standard_v), renderModel_gl.face_pts_mean)
-        face_wrap_entity = wrapModel.copy()
-        # 正规点
-        face_wrap_entity[:len(index_wrap),:3] = face_pts_mean_personal_primer[index_wrap, :3]
-        # 边缘点
-        vert_mid = face_wrap_entity[:,:3][index_edge_wrap[:4] + index_edge_wrap[-4:]].mean(axis=0)
-        for index_, jj in enumerate(index_edge_wrap):
-            face_wrap_entity[len(index_wrap) + index_,:3] = face_wrap_entity[jj, :3] + (face_wrap_entity[jj, :3] - vert_mid) * (0.3 - abs(10-index_)/40)
-        # 牙齿点
-        from talkingface.utils import INDEX_LIPS, main_keypoints_index, INDEX_LIPS_UPPER, INDEX_LIPS_LOWER
-        # 上嘴唇中点
-        mid_upper_mouth = np.mean(face_pts_mean_personal_primer[main_keypoints_index][INDEX_LIPS_UPPER], axis=0)
-        mid_upper_teeth = np.mean(face_wrap_entity[-36:-18, :3], axis=0)
-        tmp = mid_upper_teeth - mid_upper_mouth
-        face_wrap_entity[-36:-18, :2] = face_wrap_entity[-36:-18, :2] - tmp[:2]
-        # 下嘴唇中点
-        mid_lower_mouth = np.mean(face_pts_mean_personal_primer[main_keypoints_index][INDEX_LIPS_LOWER], axis=0)
-        mid_lower_teeth = np.mean(face_wrap_entity[-18:, :3], axis=0)
-        tmp = mid_lower_teeth - mid_lower_mouth
-        print(tmp)
-        face_wrap_entity[-18:, :2] = face_wrap_entity[-18:, :2] - tmp[:2]
+        from mini_live.obj.wrap_utils import newWrapModel
+        face_wrap_entity = newWrapModel(wrapModel, face_pts_mean_personal_primer)
 
         renderModel_gl.GenVBO(face_wrap_entity)
 
         wav2_dir = glob.glob(r"F:\C\AI\CV\DH008_few_shot\wav/*.wav")
-        # wav2_dir = ["F:/aaa.wav"]
         sss = random.randint(0, len(wav2_dir)-1)
         wavpath = wav2_dir[sss]
         bs_array = Audio2bs(wavpath, Audio2FeatureModel)[5:] * 0.5
@@ -285,59 +257,29 @@ if __name__ == "__main__":
             verts_frame_buffer = np.array(list_standard_vt)[frame_index, index_wrap, :2].copy() * 2 - 1
 
             rgba = renderModel_gl.render2cv(verts_frame_buffer, out_size=out_size, mat_world=mat_list[frame_index].T, bs_array=bs)
-            rgba = cv2.cvtColor(rgba, cv2.COLOR_RGBA2RGB)
+            rgb = cv2.cvtColor(rgba, cv2.COLOR_RGBA2RGB)
 
+            # rgba = cv2.resize(rgba, (128, 128))
+            rgb = rgb[::2, ::2, :]
 
-            face_mask = (rgba[:,:,2] > 200)|((rgba[:,:,2] < 100))
-            face_mask = face_mask.astype(np.uint8)
-            face_mask = np.concatenate([face_mask[:,:,np.newaxis],face_mask[:,:,np.newaxis],face_mask[:,:,np.newaxis]], axis = 2)
+            gl_tensor = torch.from_numpy(rgb/255.).float().permute(2, 0, 1).unsqueeze(0)
+            source_tensor = cv2.resize(list_standard_img[frame_index], (128, 128))
+            source_tensor = torch.from_numpy(source_tensor/255.).float().permute(2, 0, 1).unsqueeze(0)
 
+            warped_img = renderModel_mini.interface(source_tensor.cuda(), gl_tensor.cuda())
 
-            wrap_rgb = rgba[:,:,:2]
-            # print(rgba[:,:,0].mean(),rgba[:,:,1].mean(),rgba[:,:,2].mean())
-            deformation = (wrap_rgb.astype(float) / 255. * 2 - 1) * 320 * 0.5
-
-            # 假设deformation的前两通道分别代表X和Y方向的位移
-            x_displacement = deformation[:, :, 0]
-            y_displacement = deformation[:, :, 1]
-
-            # 创建网格坐标
-            x, y = np.meshgrid(np.arange(320), np.arange(320))
-
-            # 计算新的映射
-            map_x = (x - x_displacement).astype(np.float32)
-            map_y = (y - y_displacement).astype(np.float32)
-
-            # # 读取待变形的图像
-            # img = cv2.imread(img_filenames[frame_index])
-
-            img0 = list_standard_img[frame_index]
-            # 使用cv2.remap进行图像变形
-            warped_img = cv2.remap(img0, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT,
-                                   borderValue=(0, 0, 0))
-            warped_img = warped_img * (1-face_mask) + rgba * face_mask
-
-            warped_img2 = img0.copy()
-            pad = 5
-            warped_img2[pad:-pad,pad:-pad] = warped_img[pad:-pad,pad:-pad]
-            fake_face = cv2.resize(warped_img2, (160, 160))
-            fake_mouth = fake_face[52:-52, 44:-44]
-            # print(rgb_mouth.shape)
-            # cv2.imshow('scene', rgb_mouth)
-            # cv2.waitKey(-1)
-
-            fake_mouth2 = renderModel_mini.interface(fake_mouth)
-
-            fake_mouth2 = fake_mouth2 * mouth_fusion_mask + fake_mouth * (1 - mouth_fusion_mask)
-            fake_face[52:-52, 44:-44] = fake_mouth2
+            image_numpy = warped_img.detach().squeeze(0).cpu().float().numpy()
+            image_numpy = np.transpose(image_numpy, (1, 2, 0)) * 255.0
+            image_numpy = image_numpy.clip(0, 255)
+            image_numpy = image_numpy.astype(np.uint8)
 
             x_min, y_min, x_max, y_max = list_source_crop_rect[frame_index]
 
-            img_face = cv2.resize(fake_face, (x_max - x_min, y_max - y_min))
+            img_face = cv2.resize(image_numpy, (x_max - x_min, y_max - y_min))
             img_bg = list_video_img[frame_index]
             img_bg[y_min:y_max, x_min:x_max] = img_face
             # cv2.imshow('scene', img_bg[:,:,::-1])
-            # cv2.waitKey(10)
+            # cv2.waitKey(40)
             # print(time.time())
 
             videoWriter.write(img_bg[:,:,::-1])

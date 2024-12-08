@@ -15,3 +15,32 @@ index_edge_wrap = [111,43,57,21,76,59,68,67,78,66,69,168,177,169,170,161,176,123
 index_edge_wrap_upper = [111, 110, 51, 52, 53, 54, 48, 63, 56, 47, 46, 1, 148, 149, 158, 165, 150, 156, 155, 154, 153, 207, 208]
 
 print(len(index_wrap))
+
+# index_wrap = index_wrap + [291, 409, 270, 269, 267, 0, 37, 39, 40, 185, 61,
+#                            146, 91, 181, 84, 17, 314, 405, 321, 375,]
+import numpy as np
+# 求平均人脸
+def newWrapModel(wrapModel, face_pts_mean_personal_primer):
+
+        face_wrap_entity = wrapModel.copy()
+        # 正规点
+        face_wrap_entity[:len(index_wrap),:3] = face_pts_mean_personal_primer[index_wrap, :3]
+        # 边缘点
+        vert_mid = face_wrap_entity[:,:3][index_edge_wrap[:4] + index_edge_wrap[-4:]].mean(axis=0)
+        for index_, jj in enumerate(index_edge_wrap):
+            face_wrap_entity[len(index_wrap) + index_,:3] = face_wrap_entity[jj, :3] + (face_wrap_entity[jj, :3] - vert_mid) * (0.3 - abs(10-index_)/40)
+        # 牙齿点
+        from talkingface.utils import INDEX_LIPS, main_keypoints_index, INDEX_LIPS_UPPER, INDEX_LIPS_LOWER
+        # 上嘴唇中点
+        mid_upper_mouth = np.mean(face_pts_mean_personal_primer[main_keypoints_index][INDEX_LIPS_UPPER], axis=0)
+        mid_upper_teeth = np.mean(face_wrap_entity[-36:-18, :3], axis=0)
+        tmp = mid_upper_teeth - mid_upper_mouth
+        face_wrap_entity[-36:-18, :2] = face_wrap_entity[-36:-18, :2] - tmp[:2]
+        # 下嘴唇中点
+        mid_lower_mouth = np.mean(face_pts_mean_personal_primer[main_keypoints_index][INDEX_LIPS_LOWER], axis=0)
+        mid_lower_teeth = np.mean(face_wrap_entity[-18:, :3], axis=0)
+        tmp = mid_lower_teeth - mid_lower_mouth
+        # print(tmp)
+        face_wrap_entity[-18:, :2] = face_wrap_entity[-18:, :2] - tmp[:2]
+
+        return face_wrap_entity

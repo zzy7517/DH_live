@@ -85,16 +85,38 @@ def crop_mouth(pts_array_origin, img_w, img_h, is_train = False):
     y_min = max(0, y_min)
     x_max = min(x_max, img_w)
     y_max = min(y_max, img_h)
-    new_size = max((x_max - x_min), (y_max - y_min))*0.56
+    new_size = max((x_max - x_min), (y_max - y_min))*0.46
 
     if is_train:
         h_offset = int(new_size * 0.04)
         h_offset = random.randint(-h_offset, h_offset)
         center_y = center_y + h_offset
 
-    x_min, y_min, x_max, y_max = int(center_x - new_size), int(center_y - new_size*0.95), int(
-        center_x + new_size), int(center_y + new_size*1.05)
+    x_min, y_min, x_max, y_max = int(center_x - new_size), int(center_y - new_size*0.89), int(
+        center_x + new_size), int(center_y + new_size*1.11)
+
+    x_min = max(0, x_min)
+    y_min = max(0, y_min)
+    x_max = min(img_w, x_max)
+    y_max = min(img_h, y_max)
     return np.array([x_min, y_min, x_max, y_max])
+
+def draw_mouth_maps(keypoints, size=(256, 256), im_edges = None):
+    w, h = size
+    # edge map for face region from keypoints
+    if im_edges is None:
+        im_edges = np.zeros((h, w, 3), np.uint8)  # edge map for all edges
+    pts = keypoints[INDEX_LIPS_OUTER, :2]
+    pts = pts.reshape((-1, 1, 2)).astype(np.int32)
+    cv2.fillPoly(im_edges, [pts], color=(0, 0, 0))
+
+    pts = keypoints[INDEX_LIPS_UPPER, :2]
+    pts = pts.reshape((-1, 1, 2)).astype(np.int32)
+    cv2.fillPoly(im_edges, [pts], color=(255, 0, 0))
+    pts = keypoints[INDEX_LIPS_LOWER, :2]
+    pts = pts.reshape((-1, 1, 2)).astype(np.int32)
+    cv2.fillPoly(im_edges, [pts], color=(127, 0, 0))
+    return im_edges
 
 def draw_face_feature_maps(keypoints, mode = ["mouth", "nose", "eye", "oval"], size=(256, 256), im_edges = None,  mouth_width = None, mouth_height = None):
     w, h = size

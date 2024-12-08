@@ -2,6 +2,11 @@ import torch
 from torch import nn
 from torch.nn import BatchNorm2d
 import torch.nn.functional as F
+import cv2
+import numpy as np
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
 class DownBlock(nn.Module):
     def __init__(self, in_features, out_features, kernel_size=3, padding=1, groups=1, use_relu=True):
         super(DownBlock, self).__init__()
@@ -260,13 +265,9 @@ class DINet_mini(nn.Module):
             DownBlock2d(f_dim, f_dim, kernel_size=3, padding=1),
         )
 
-        appearance_conv_list = []
-        appearance_conv_list.append(
-            nn.Sequential(
+        self.appearance_conv = nn.Sequential(
                 ResBlock2d(f_dim, f_dim, 3, 1),
             )
-        )
-        self.appearance_conv_list = nn.ModuleList(appearance_conv_list)
         self.adaAT = AdaAT(f_dim, f_dim, cuda)
         self.out_conv = nn.Sequential(
             SameBlock2d(f_dim*2, f_dim, kernel_size=3, padding=1),
@@ -282,6 +283,10 @@ class DINet_mini(nn.Module):
         ## reference image encoder
         self.ref_img = ref_img
         self.ref_in_feature = self.ref_in_conv(self.ref_img)
+        # import pickle
+        # with open("xxx.pkl", "wb") as f:
+        #     pickle.dump(self.ref_in_feature, f)
+        # print("ref_in_feature", self.ref_in_feature.size())
 
     def interface(self, source_img):
         self.source_img = source_img
@@ -289,9 +294,9 @@ class DINet_mini(nn.Module):
         source_in_feature = self.source_in_conv(self.source_img)
         img_para = self.trans_conv(torch.cat([source_in_feature, self.ref_in_feature], 1))
         img_para = self.global_avg2d(img_para).squeeze(3).squeeze(2)
-        trans_para = img_para
-        ref_trans_feature = self.adaAT(self.ref_in_feature, trans_para)
-        ref_trans_feature = self.appearance_conv_list[0](ref_trans_feature)
+
+        ref_trans_feature = self.adaAT(self.ref_in_feature, img_para)
+        ref_trans_feature = self.appearance_conv(ref_trans_feature)
         merge_feature = torch.cat([source_in_feature, ref_trans_feature], 1)
         out = self.out_conv(merge_feature)
         return out
@@ -302,18 +307,108 @@ class DINet_mini(nn.Module):
         out = self.interface(self.driving_img)
         return out
 
+class DINet_mini_pipeline(nn.Module):
+    def __init__(self, source_channel,ref_channel, cuda = True):
+        super(DINet_mini_pipeline, self).__init__()
+        self.infer_model = DINet_mini(source_channel,ref_channel, cuda = cuda)
+
+        self.grid_tensor = F.affine_grid(torch.eye(2, 3).unsqueeze(0).float(), (1, 1, 128, 128), align_corners=False).to("cuda" if cuda else "cpu")
+
+        face_fusion_tensor = cv2.imread(os.path.join(current_dir, "../../mini_live/face_fusion_mask.png"))
+        face_fusion_tensor = torch.from_numpy(face_fusion_tensor[:,:,:1] / 255.).float().permute(2, 0, 1).unsqueeze(0)
+        mouth_fusion_tensor = cv2.imread(os.path.join(current_dir, "../../mini_live/mouth_fusion_mask.png"))
+        mouth_fusion_tensor = torch.from_numpy(mouth_fusion_tensor[:,:,:1] / 255.).float().permute(2, 0, 1).unsqueeze(0)
+
+        self.face_fusion_tensor = face_fusion_tensor.to("cuda" if cuda else "cpu")
+        self.mouth_fusion_tensor = mouth_fusion_tensor.to("cuda" if cuda else "cpu")
+
+    def ref_input(self, ref_tensor):
+        self.infer_model.ref_input(ref_tensor)
+
+    def interface(self, source_tensor, gl_tensor):
+        face_mask = F.relu(torch.abs(gl_tensor[:, 2:] * 2 - 1) - 0.9)* 10
+        # face_mask = (gl_tensor[:, 2] == 1) | ((gl_tensor[:, 2] == 0))
+        # face_mask = face_mask.float()
+
+        deformation = gl_tensor[:, :2] * 2 - 1
+        # 假设deformation的前两通道分别代表X和Y方向的位移
+        # deformation的形状为[1, 2, H, W]，而grid的形状为[1, H, W, 2]
+        deformation = deformation * self.face_fusion_tensor
+        deformation = deformation.permute(0, 2, 3, 1)
+
+        warped_grid = self.grid_tensor - deformation
+
+        # img0应该是一个形状为[1, C, H, W]的tensor
+        warped_img0 = F.grid_sample(source_tensor, warped_grid, mode='bilinear', padding_mode='zeros',
+                                    align_corners=False)
+
+
+        warped_tensor = warped_img0 * (1 - face_mask) + gl_tensor * face_mask
+        warped_tensor = F.interpolate(warped_tensor, (128, 128))
+        w_pad = int((128 - 72) / 2)
+        h_pad = int((128 - 56) / 2)
+
+        fake_mouth_tensor = warped_tensor[:, :, h_pad:-h_pad, w_pad:-w_pad]
+        fake_out = self.infer_model.interface(fake_mouth_tensor)
+        # fake_out = fake_mouth_tensor
+        fake_out = fake_out * self.mouth_fusion_tensor + fake_mouth_tensor*(1-self.mouth_fusion_tensor)
+        warped_tensor[:, :, h_pad:-h_pad, w_pad:-w_pad] = fake_out
+        return warped_tensor
+    def forward(self, source_tensor, gl_tensor, ref_tensor):
+        '''
+
+        Args:
+            source_tensor: [batch, 3, 128, 128]
+            gl_tensor: [batch, 3, 128, 128]
+            ref_tensor: [batch, 12, 128, 128]
+
+        Returns:
+            warped_tensor: [batch, 3, 128, 128]
+        '''
+        self.ref_input(ref_tensor)
+        warped_tensor = self.interface(source_tensor, gl_tensor)
+        return warped_tensor
+
+
 if __name__ == "__main__":
     device = "cpu"
     import torch.nn.functional as F
-    size = (54, 72)  # h, w
-    model = DINet_mini(3, 6*3, cuda=device is "cuda")
+    # size = (56, 72)  # h, w
+    # model = DINet_mini(3, 4*3, cuda = device=="cuda")
+    # model.eval()
+    # model = model.to(device)
+    # driving_img = torch.zeros([1, 3, size[0], size[1]]).to(device)
+    # ref_img = torch.zeros([1, 4*3, size[0], size[1]]).to(device)
+    # from thop import profile
+    # from thop import clever_format
+    #
+    # flops, params = profile(model.to(device), inputs=(ref_img, driving_img))
+    # flops, params = clever_format([flops, params], "%.3f")
+    # print(flops, params)
+
+    size = (128, 128)  # h, w
+    model = DINet_mini_pipeline(3, 4*3, cuda = device=="cuda")
     model.eval()
     model = model.to(device)
-    driving_img = torch.zeros([1, 3, size[0], size[1]]).to(device)
-    ref_img = torch.zeros([1, 6*3, size[0], size[1]]).to(device)
+    source_tensor = torch.ones([1, 3, size[0], size[1]]).to(device)
+    gl_tensor = torch.ones([1, 3, size[0], size[1]]).to(device)
+    ref_tensor = torch.ones([1, 4*3, 56, 72]).to(device)
+    face_fusion_tensor = torch.ones([1, 1, size[0], size[1]]).to(device)
+    mouth_fusion_tensor = torch.ones([1, 1, 56, 72]).to(device)
+
     from thop import profile
     from thop import clever_format
 
-    flops, params = profile(model.to(device), inputs=(ref_img, driving_img))
+    flops, params = profile(model.to(device), inputs=(source_tensor, gl_tensor, ref_tensor))
     flops, params = clever_format([flops, params], "%.3f")
     print(flops, params)
+
+    import cv2
+
+    out = model(source_tensor, gl_tensor, ref_tensor)
+    image_numpy = out.detach().squeeze(0).cpu().float().numpy()
+    image_numpy = np.transpose(image_numpy, (1, 2, 0)) * 255.0
+    image_numpy = image_numpy.clip(0, 255)
+    image_numpy = image_numpy.astype(np.uint8)
+    cv2.imwrite("sss1.png", image_numpy)
+

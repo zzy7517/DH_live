@@ -56,7 +56,7 @@ void main() {
 
     if (a_texture.x >= 3.0f)
     {
-        gl_Position = gProjection * vec4(tmp_Position.x, tmp_Position.y, 500, 1.0);
+        gl_Position = gProjection * vec4(tmp_Position.x, tmp_Position.y, 500.0, 1.0);
     }
     else
     {

@@ -72,13 +72,13 @@ def calc_face_mat(pts_array_origin, face_pts_mean):
         pts_normalized_list.append(keypoints_normalized[:, :3])
 
     x = np.array(pts_normalized_list).reshape(len(pts_normalized_list), -1)
-    print(x.shape)
+    # print(x.shape)
     n_components = min(25, len(pts_array_origin)//20)
     pca = decomposition.PCA(n_components=n_components)
     pca.fit(x)
     y = pca.transform(x)
     x_new = pca.inverse_transform(y)
-    x_new = x_new.reshape(len(x_new), 478, 3)
+    x_new = x_new.reshape(len(x_new), -1, 3)
 
     pts_normalized_list = []
     mat_list = []
@@ -126,7 +126,7 @@ def calc_face_mat(pts_array_origin, face_pts_mean):
         keypoints_normalized = np.linalg.inv(rotationMatrix).dot(keypoints).T
         pts_normalized_list.append(keypoints_normalized[:,:3])
 
-    face_pts_mean_personal = pca.mean_.reshape(478, 3)
+    face_pts_mean_personal = pca.mean_.reshape(-1, 3)
     return mat_list,pts_normalized_list,face_pts_mean_personal
 face_pts_mean = None
 def video_pts_process(pts_array_origin):

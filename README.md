@@ -1,7 +1,8 @@
-# Real-time Live Streaming Digital Human
+# Mobile and Web Real-time Live Streaming Digital Human! 
 # 实时直播数字人  [bilibili video](https://www.bilibili.com/video/BV1Ppv1eEEgj/?vd_source=53601feee498369e726af7dbc2dae349)
+# 所有设备实时运行！甚至是树莓派！ 
 ### News
-## fastest and cpu real-time model released! try demo_mini.py! More demo on PC、 web、 android&IOS will be released soon！
+## Fastest model released! More demos joins me through the contact information at the bottom!
  All checkpoint files are moved to [baiduNetDisk](https://pan.baidu.com/s/1jH3WrIAfwI3U5awtnt9KPQ?pwd=ynd7)
 ## Training
 Details on the render model training can be found [here](https://github.com/kleinlee/DH_live/tree/master/train).
@@ -29,12 +30,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cu124
 pip install -r requirements.txt
 cd checkpoint
 ```
-on Linux
-```bash
-cat render.pth.gz.001 render.pth.gz.002 > render.pth.gz
-gzip -d -c render.pth.gz > render.pth
-```
-on Windows, use zip software such as 7zip/WinRAR to unzip checkpoint file.
+unzip checkpoint files from [baiduNetDisk](https://pan.baidu.com/s/1jH3WrIAfwI3U5awtnt9KPQ?pwd=ynd7)
 ### Prepare Your Video
 Next, prepare your video using the data_preparation script. Replace YOUR_VIDEO_PATH with the path to your video:
 ```bash
@@ -56,7 +52,10 @@ python demo_avatar.py
 We would like to thank the contributors of [Wav2Lip](https://github.com/Rudrabha/Wav2Lip), [DINet](https://github.com/MRzzm/DINet), [LiveSpeechPortrait](https://github.com/YuanxunLu/LiveSpeechPortraits) repositories, for their open research and contributions.
 
 ## License
-This project is licensed under the MIT License.
+DH_live is licensed under the MIT License.
 
-## Contact
-For any questions or suggestions, please contact us at [kleinlee1@outlook.com].
+DH_live_mini is licensed under the Apache 2.0.
+## 联系
+| 进入QQ群聊，分享看法和最新咨询。 | 加我好友，请备注“进群”，拉你进去微信交流群。 |
+|-------------------|----------------------|
+| ![QQ群聊](https://github.com/user-attachments/assets/29bfef3f-438a-4b9f-ba09-e1926d1669cb) | ![微信交流群](https://github.com/user-attachments/assets/b1f24ebb-153b-44b1-b522-14f765154110) |
