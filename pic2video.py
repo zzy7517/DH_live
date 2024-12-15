@@ -1,5 +1,5 @@
-import cv2
 import numpy as np
+import cv2
 
 # 输入图片路径
 image_path = '3d.png'
