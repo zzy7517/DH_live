@@ -101,7 +101,7 @@ def run(video_path, pkl_path, wav_path, output_video_path):
         source_tensor = cv2.resize(list_standard_img[frame_index], (128, 128))
         source_tensor = torch.from_numpy(source_tensor / 255.).float().permute(2, 0, 1).unsqueeze(0)
 
-        warped_img = renderModel_mini.interface(source_tensor.cuda(), gl_tensor.cuda())
+        warped_img = renderModel_mini.interface(source_tensor, gl_tensor)
 
         image_numpy = warped_img.detach().squeeze(0).cpu().float().numpy()
         image_numpy = np.transpose(image_numpy, (1, 2, 0)) * 255.0

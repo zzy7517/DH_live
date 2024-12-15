@@ -242,7 +242,7 @@ class AdaAT(nn.Module):
         return trans_feature
 
 class DINet_mini(nn.Module):
-    def __init__(self, source_channel,ref_channel, cuda = True):
+    def __init__(self, source_channel,ref_channel, cuda = False):
         super(DINet_mini, self).__init__()
         f_dim = 20
         self.source_in_conv = nn.Sequential(
@@ -308,7 +308,7 @@ class DINet_mini(nn.Module):
         return out
 
 class DINet_mini_pipeline(nn.Module):
-    def __init__(self, source_channel,ref_channel, cuda = True):
+    def __init__(self, source_channel,ref_channel, cuda = False):
         super(DINet_mini_pipeline, self).__init__()
         self.infer_model = DINet_mini(source_channel,ref_channel, cuda = cuda)
 

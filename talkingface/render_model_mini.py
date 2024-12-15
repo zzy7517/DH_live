@@ -21,8 +21,8 @@ class RenderModel_Mini:
         n_ref = 3
         source_channel = 3
         ref_channel = n_ref * 4
-        self.net = DINet(source_channel, ref_channel).cuda()
-        checkpoint = torch.load(ckpt_path)
+        self.net = DINet(source_channel, ref_channel).to(device)
+        checkpoint = torch.load(ckpt_path, map_location=torch.device(device))
         net_g_static = checkpoint['state_dict']['net_g']
         self.net.infer_model.load_state_dict(net_g_static)
         self.net.eval()
@@ -45,7 +45,7 @@ class RenderModel_Mini:
             ref_img_list.append(ref_img)
         self.ref_img = np.concatenate(ref_img_list, axis=2)
 
-        ref_tensor = torch.from_numpy(self.ref_img / 255.).float().permute(2, 0, 1).unsqueeze(0).cuda()
+        ref_tensor = torch.from_numpy(self.ref_img / 255.).float().permute(2, 0, 1).unsqueeze(0)
 
         self.net.ref_input(ref_tensor)
 

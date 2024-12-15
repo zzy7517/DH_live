@@ -6,6 +6,7 @@ import torch
 import librosa
 import pickle
 device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cpu"
 pca = None
 def LoadAudioModel(ckpt_path):
     # if method == "lstm":
@@ -14,7 +15,7 @@ def LoadAudioModel(ckpt_path):
     #     Audio2FeatureModel.eval()
     from talkingface.models.audio2bs_lstm import Audio2Feature
     Audio2FeatureModel = Audio2Feature()  # 调用模型Model
-    Audio2FeatureModel.load_state_dict(torch.load(ckpt_path))
+    Audio2FeatureModel.load_state_dict(torch.load(ckpt_path, map_location=torch.device(device)))
     Audio2FeatureModel = Audio2FeatureModel.to(device)
     Audio2FeatureModel.eval()
     return Audio2FeatureModel
