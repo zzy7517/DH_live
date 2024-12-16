@@ -10,8 +10,6 @@ fps = 30
 # 视频时长（秒）
 duration = 5
 
-
-
 if __name__ == '__main__':
     # 读取图片
     image = cv2.imread(image_path)

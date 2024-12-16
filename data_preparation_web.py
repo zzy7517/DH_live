@@ -268,7 +268,7 @@ def step3_generate_ref_tensor(list_source_crop_rect, list_standard_v, out_path):
         ref_img_list.append(ref_img)
     ref_img = np.concatenate(ref_img_list, axis=2)
 
-    ref_tensor = torch.from_numpy(ref_img / 255.).float().permute(2, 0, 1).unsqueeze(0).cuda()
+    ref_tensor = torch.from_numpy(ref_img / 255.).float().permute(2, 0, 1).unsqueeze(0).cpu()
 
     renderModel_mini.net.ref_input(ref_tensor)
 
@@ -280,7 +280,7 @@ def step3_generate_ref_tensor(list_source_crop_rect, list_standard_v, out_path):
     np.savetxt(os.path.join(out_path, 'ref_tensor_data.txt'), ref_in_feature, fmt='%.8f')
 
 def main():
-    video_in_path = r"E:\data\video\video/5.mp4"
+    video_in_path = r"D:\python\DH_live\output.mp4"
     out_path = "web_demo/static"
     pts_3d, vid_width,vid_height = step0_keypoints(video_in_path, out_path)
     list_source_crop_rect, list_standard_v = step1_crop_mouth(pts_3d, vid_width, vid_height)
